@@ -1,0 +1,15 @@
+#!/bin/bash
+echo "0 0"
+total_area=`r.stats -an --q input=topmod_basin | sed 's/^[^ ]* //'`
+##total_length=`v.to.db -p --q map=topmod_lfp option=length | sed '/cat/d; s/.*|//; q'`
+total_length=`v.to.db -p --q map=topmod_lfp_vect option=length | sed '/cat/d; s/.*|//; q'`
+
+# Loop through each sub-basin (10%) calculating area ratios
+i=1
+while [ $i -le 9 ]
+do
+        area=`r.stats -an --q input=topmod_subbasin$i | sed 's/^[^ ]* //'`
+        perl -e 'printf "%f %f\n", '"0.1*$i*$total_length, ($total_area-$area)/$total_area"
+        i=`expr $i + 1`
+done
+echo "$total_length 1.0000"

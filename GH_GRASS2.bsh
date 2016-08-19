@@ -1,0 +1,287 @@
+#!/bin/bash
+  
+# This script was completed by JAM at UEA on 16/03/2016 to facilitate the
+# running of the GRASS model on a "bootsock" walk area data used in the
+# Enigma project. It is a modification of Roy Sandersons script from
+# University of Newcastle, who put the original together.
+
+# Script last modified on 18/08/2016
+
+# Import the raster map of the Great Harwood raster map of the terrain, and also
+# the vecto map of the walk route, as a demo
+
+r.in.gdal input=./GHrast.asc output=GHsm_5m -o --overwrite
+
+v.in.ogr input=GHvect.shp layer=GHvect output=GHwalk -o --overwrite
+
+# Input which of the walk areas we are working with for this analysis
+echo What walk area would you like to run?
+echo
+echo The choices are:
+echo GH for Great Harwood
+read -e -p "choose a walk area:" -i "GH" walk_area
+echo
+echo 'walk area is set to' $walk_area
+
+# set small (5km x 5km) or lg (16km x 16 km) area
+echo What size of digital elevation map \(DEM\) would you like to use?
+echo
+echo The choices are:
+echo sm for a 5 km x 5 km map with the walk area in the centre
+read -e -p "enter a value for map size:" -i "sm" map_size
+echo
+echo 'walk map size is set to' $map_size
+echo
+echo Another important variable for this analysis is something called
+echo "threshold" for the r.watershed calculations.  This is the minimum
+echo number of squares, from your DEM, that you are prepared to accept as
+echo a unique basin for drainage.  For Jim\'s maps, built on a 5m
+echo resolution it appears that approximately 20000 is a good starting
+echo point, and is the default value, however change as necessary.
+read -e -p "enter your value for threshold:" -i "20000" thresh
+echo
+echo 'threshold is set to' $thresh
+
+# determine if operator wants interum results or just final
+echo Do you want interum results/graphs during the run?
+echo Your choices are y or n.
+read -e -p "break the run to show graphs:" -i "y" interum
+
+# Remove MASK if present as a precaution
+r.mask -r
+
+# Input file with rules for splitting up longest flow path into 10%
+# sections
+segment_rules='segment_rules.txt'
+if [ "$interum" = y ] ; then echo 'segment rules file for splitting \ 
+flow into sections is' $segment_rules; fi
+
+# Input template of topmod_parameters for this walk area
+topmod_params_init='topmod_params_init_'$walk_area'.txt'
+if [ "$interum" = y ] ; then echo 'topmodel paramenters file used \
+is' $topmod_params_init; fi
+
+# Input raster map containing DEM for whole study area
+topmod_demraw=$walk_area$map_size"_5m"
+if [ "$interum" = y ] ; then echo 'raster map of DEM used is' \
+				  $topmod_demraw; fi
+
+# Set the region to that of the GRASS DEM raster map
+g.region rast=$topmod_demraw
+
+# Input vector map containing walk area within the area
+topmod_walkarea=$walk_area"walk"
+if [ "$interum" = y ] ; then echo 'walk area map is' \
+				  $topmod_walkarea; fi
+
+# Number of timesteps; 365 for 2103 and 2014, 730 total
+ntimesteps='730'
+
+# stop the monitor if it is already running
+d.mon stop=wx1
+d.mon start=wx1
+
+echo "I'll now show you the input raster DEM and vector walk path maps"
+if [ "$interum" = y ] ; then read -p "Hit Enter to Continue" -n 1 -s; fi
+
+# show the first input raster and vector maps
+d.rast $topmod_demraw
+d.vect $topmod_walkarea
+if [ "$interum" = y ] ; then read -p "Hit Enter to Continue" -n 1 -s ; fi
+
+# # Set the region to that of the GRASS DEM raster map
+# g.region rast=$topmod_demraw
+
+# Get the resolution of the DEM we are using which is required clean
+# longest flow path vector
+resolution=`g.region -p | grep nsres | awk '{print $2}'`
+
+# Fill any depressions in topmod_demraw but only for the MASK area
+r.fill.dir input=$topmod_demraw output=topmod_demfill \
+	   direction=topmod_demdir  --overwrite
+
+# Change the colours of the elevation map
+r.colors topmod_demfill color=elevation
+if [ "$interum" = y ] ; then echo A DEM has been produced that \
+				  fills in any small depressions; fi
+
+# Calculate river network, remove any old files that might be present
+# because new ones will be produced
+g.remove -f type=raster name=topmod_streams
+g.remove -f type=raster name=topmod_drain
+
+# produce the new files, note that the value of threshold is important and
+# effects the numbers of subbasins produced
+r.watershed -s elevation=topmod_demfill threshold=$thresh \
+	    drainage=topmod_drain stream=topmod_streams \
+	    basin=topmod_basin convergence=5 --overwrite
+
+# erase the graphical display and show the raster of the stream network
+# calculated
+d.erase
+d.rast topmod_basin
+d.rast topmod_streams
+d.vect $topmod_walkarea
+if [ "$interum" = y ] ; then read -p "This is the total stream basin \
+area. Hit Enter to Continue" -n 1 -s ; fi
+
+# Find outflow from (sub)catchment
+# Calculate Strahler stream order
+r.stream.order stream_rast=topmod_streams direction=topmod_drain \
+	       strahler=topmod_strahler --overwrite
+
+# The output stream section has highest Strahler number; find DEM for this
+# section
+output_stream=`r.stats -n topmod_strahler | tail -1`
+if [ "$interum" = y ] ; then echo 'the highest stream number found is' \
+				  $output_stream ; fi
+
+r.mapcalc expression="output_stream_dem=if(topmod_strahler==$output_stream,\
+topmod_demfill,null())" --overwrite
+r.stats -gn output_stream_dem > output_flow.txt
+
+# Assume output E and N coords are at minimum DEM of this stream
+E_outflow=`cat output_flow.txt | xargs -n3 | sort -nrk3,3 | tail -1 | \
+awk '{print $1}'`
+N_outflow=`cat output_flow.txt | xargs -n3 | sort -nrk3,3 | tail -1 | \
+awk '{print $2}'`
+echo 'Easting and Northing coordinates for outflow are respectively' \
+ t     $E_outflow, and $N_outflow
+
+if [ "$interum" = y ] ; then read -p "Hit Enter to Continue" -n 1 -s ; fi
+
+# Calculate longest flowpath
+# Use r.lfp to find raster LFP
+r.water.outlet input=topmod_drain output=topmod_basin \
+	       coordinates=$E_outflow,$N_outflow --overwrite
+
+# Now moving into the final section, so instead of using the whole original
+# map, it now uses only the actual basin selected that drains out this
+# point
+r.lfp input=topmod_drain output=topmod_lfp \
+      coordinates=$E_outflow,$N_outflow --overwrite
+echo "Raster longest flow path calculated"
+
+# show the longest flow path found
+d.erase 
+d.rast topmod_lfp
+if [ "$interum" = y ] ; then read -p "This is the Raster Longest flow path. \
+Hit Enter to Continue" -n 1 -s ; fi
+
+# in some cases the raster form of the lfp map must be "thinned" before it
+# can be processed by v.lfp
+r.thin input=topmod_lfp output=topmod_lfp_thin --overwrite
+
+# Use v.lfp to find vector LFP, then correct for errors via v.reclass and
+v.lfp input=topmod_lfp_thin output=topmod_lfp_vect \
+      coordinates=$E_outflow,$N_outflow --verbose --overwrite
+
+echo "A longest flow path (lfp) vector is calculated"
+
+# Show cleaned longest flow path in vector form
+d.erase
+d.rast topmod_basin
+d.vect $topmod_walkarea
+d.vect topmod_lfp_vect
+if [ "$interum" = y ] ; then read -p "This is the cleaned longest flow \
+path. Hit Enter to Continue" -n 1 -s ; fi
+
+# Create outlet points for subbasins along the Longest Flow Path (LFP) This
+# creates subbasin outlets at every 10% of LFP as is set out in the
+# segment_rules file
+v.segment input=topmod_lfp_vect output=outlets rules=$segment_rules \
+	  --overwrite --verbose
+
+# Create the subbasins
+i=1
+for coord in `v.to.db -p map=outlets option=coor | \
+sed '/cat/d; s/^.*|\(.*\)|\(.*\)|.*$/\1,\2/'`
+do    
+    r.water.outlet input=topmod_drain output=topmod_subbasin$i \
+		   coord=$coord --overwrite --verbose
+ d.erase
+ d.rast topmod_subbasin$i
+ i=`expr $i + 1`
+done
+
+# Show the outlets on the basin map
+d.erase
+d.rast topmod_basin
+d.vect $topmod_walkarea
+d.vect topmod_lfp_vect
+d.vect outlets
+if [ "$interum" = y ] ; then read -p "This the lfp with individual \
+outlets. Hit Enter to Continue" -n 1 -s ; fi
+
+# Append the distance from catchment output and area info to parameter
+# file, topmod_params_init is a template; simply add correct area on line 7
+# and area ratios. First 6 lines the same for everything
+head --lines 6 $topmod_params_init > topmod_params_$walk_area.txt
+
+# Catchment area
+r.stats -an topmod_basin --quiet | awk '{print $2}' >> \
+				       topmod_params_$walk_area.txt
+
+# Next 54 lines of template same for everything
+tail --lines 54 $topmod_params_init >> topmod_params_$walk_area.txt
+
+# Calculete cumulative area ratios of outlets
+./calculate_area_ratios.bsh >> topmod_params_$walk_area.txt
+
+# Make sure MASK is set correctly
+#r.mask -r
+r.mask raster=topmod_basin --quiet
+
+# Run TOPMODEL
+# Produce the required topographic index map
+r.topidx input=topmod_demfill output=topidx --overwrite
+
+# Create topographic index statistics file
+r.topmodel -p topidx=topidx ntopidxclasses=30 \
+	   outtopidxstats=topidxstats.txt --overwrite
+
+# Run TOPMODEL with rain and potential evapotranspiration data, and store
+# results in topmod_output.txt
+r.topmodel param="topmod_params_"$walk_area".txt" \
+	   topidxstats=topidxstats.txt input=$walk_area"_Rn_Ep.txt" \
+	   output=topmod_output.txt --overwrite
+
+# Post-process results to make them easier to read into R. This process
+# combines the columns of topmodel output data in the same file as the
+# input weather data
+tail -n +63 topmod_output.txt > topmod_output_tmp.txt
+cat topmod_output_tmp.txt | awk '{print $1,$2, $3, $4, $5, $6, $7}' > \
+				"topmod_output_"$walk_area$map_size".txt"
+rm topmod_output_tmp.txt
+
+Rscript postprocess.R $ntimesteps $walk_area $map_size
+
+echo All R scripts have run, results should be available for \
+     $walk_area$map_size.
+
+# Visually check that longest flow path covers whole area as DEM errors may
+# shorten the flowpath
+d.erase
+d.rast topmod_demfill
+v.colors topmod_lfp_vect color=blue
+d.vect topmod_lfp_vect width=2
+d.vect outlets color=black width=2 size=15
+d.vect $walk_area"walk"
+if [ "$interum" = y ] ; then read -p "Hit Enter to Continue" -n 1 -s ; fi
+
+# Copy some maps in case needed later
+g.copy raster=topmod_basin,"topmod_basin"$walk_area$map_size --overwrite
+g.copy raster=topmod_drain,"topmod_drain"$walk_area$map_size --overwrite
+g.copy vector=topmod_lfp_vect,"topmod_lfp_vect"$walk_area$map_size --overwrite 
+
+# Remove MASK if present because they hang around the next time you start
+# GRASS
+r.mask -r
+
+# Now investigate the results further
+# echo "--------------------------------------------------------------"
+# echo "Use plot_topmod_results.R to investigate results of simulation"
+# echo "topmod_output.txt simulation output plus initial params       "
+# echo "topmod_main_results.csv for easy use in plot_topmod_results.R "  
+# echo "mv topmod_output.txt & topmod_main_results.txt before new run "
+# echo "--------------------------------------------------------------"
