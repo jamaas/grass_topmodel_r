@@ -31,3 +31,20 @@ e GH_GRASS2.bsh
 bash GH_GRASS2.bsh
 bash GH_GRASS2.bsh
 exit
+ls
+bash GH_GRASS2.bsh 
+ls
+ls
+cd GHpublish/
+ls
+ls -al
+cd ghpublish2/
+ls
+cd ..
+pwd
+cd ~/research/ra1188uea/Enigma/GH-Publish-GRASS/
+ls
+ls -al
+git remote -v
+ls -lt
+exit

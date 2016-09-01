@@ -1,0 +1,503 @@
+## This script pulls in the output files for the GH walk area, and then merges
+## in the bootsock Campylobacter presence data and then produces outputs for
+## Great Harwood (GH) only for publishing the methods paper. It was first
+## produced at UEA by JAM on 08/08/2016
+
+## Last modified on 31/08/2016
+
+## remove any old variables or libraries hanging around
+rm(list=ls())
+
+## add necessary libraries
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(lme4)
+library(sjmisc)
+library(sjPlot)
+library(forecast)
+library(stringr)
+library(zoo)
+library(broom)
+library(pixiedust)
+library(gridExtra)
+library(xtable)
+library(mgcv)
+library(effects)
+library(lattice)
+library(phia)
+library(survey)
+
+## create a vector named "wknm" containing the abbreviated names for the six
+## individual walk areas
+wknm <- "GH"
+
+## Read in and merge the six topmodel output (.csv) files into a single
+## data.frame using the vector of short names
+AllOutputs <- ldply(wknm, function(x) read.csv
+               (file = paste("../", x, "sm_results.csv", sep = "")))
+
+## convert dates from factor format to POSIXct
+AllOutputs$date <- as.POSIXct(AllOutputs$date)
+
+## read in Campylobacter prevelance data file, remove first column as
+## unnecssary, set date column to POSIXct, location column to character, and
+## presence to integer
+CampyData <- read.csv(file = "../MeanPosBootSock.csv",
+           colClasses = c("NULL", "POSIXct", "character", "integer") )
+
+## replace the long string names with short ones so the topmodel outputs data
+## can be merged with the Campylobacter presence data, by walk area
+## CampyData$location <- str_replace_all(str_c(CampyData$location),
+##     c("Blencathra" = "BC", "Great Harwood" = "GH", "Whiteley Green" = "WG",
+##         "Reepham" = "RP", "Horsey" = "HR", "Stowmarket" = "SM"))
+CampyData$location <- str_replace_all(str_c(CampyData$location),
+    c("Great Harwood" = "GH"))
+
+## bring in livestock data
+LsData <- read.csv(file = '../../Livestock_census_data/Sixwalks_livestock2.csv',
+                   header = FALSE)
+
+livestock_cols <- c('livewalkarea', 'poultry', 'cattle', 'horses', 'goats',
+                    'deer', 'sheep', 'pigs', 'animalunits')
+
+colnames(LsData) <- livestock_cols
+
+## merge the two files, results from topmodel and also the Campy presence data,
+## together by walk area and date.  This data is daily for the complete two year
+## period for all of 2013 and 2014.
+CombinedOutput1 <- merge(AllOutputs, CampyData, by.x = c("walk.area",
+    "date"), by.y = c("location", "walk.date"), all.x = TRUE)
+
+## now merge in the livestock data for statistical analysis
+CombinedOutput2 <- merge(CombinedOutput1, LsData, by.x = "walk.area",
+                         by.y = "livewalkarea", all.x = TRUE)
+
+## calculate cumulative sums of rainfall data to see if that explains more
+## variance in the statistical analysis
+
+## first rain on the day prior to the walk day
+CombinedOutput2$rain1d <- rollapply(CombinedOutput2$rain, list(seq(-1,-1,1)),
+    sum, fill = mean(CombinedOutput2$rain), align = "right")
+
+## first rain cumulative sum over two days prior to the walk day
+CombinedOutput2$rain2d <- rollapply(CombinedOutput2$rain, list(seq(-2,-1,1)),
+    sum, fill = mean(CombinedOutput2$rain), align = "right")
+
+## rain cumalative sum for five days prior to walk day
+CombinedOutput2$rain5d <- rollapply(CombinedOutput2$rain, list(seq(-5,-1,1)),
+    sum, fill = mean(CombinedOutput2$rain), align = "right")
+
+## rain cumalative sum for ten days prior to the walk day
+CombinedOutput2$rain10d <- rollapply(CombinedOutput2$rain, list(seq(-10,-1,1)),
+      sum, fill = mean(CombinedOutput2$rain), align = "right")
+
+## calculate cumulative mean of temperature data to see if that explains more
+## variance in the statistical analysis
+
+## first temp on the day prior to the walk day
+CombinedOutput2$temp1d <- rollapply(CombinedOutput2$temp, list(seq(-1,-1,1)),
+    mean, fill = mean(CombinedOutput2$temp), align = "right")
+
+## first temp mean over two days prior to the walk day
+CombinedOutput2$temp2d <- rollapply(CombinedOutput2$temp, list(seq(-2,-1,1)),
+    mean, fill = mean(CombinedOutput2$temp), align = "right")
+
+## temp mean for five days prior to walk day
+CombinedOutput2$temp5d <- rollapply(CombinedOutput2$temp, list(seq(-5,-1,1)),
+    mean, fill = mean(CombinedOutput2$temp), align = "right")
+
+## temp mean for ten days prior to the walk day
+CombinedOutput2$temp10d <- rollapply(CombinedOutput2$temp, list(seq(-10,-1,1)),
+    mean, fill = mean(CombinedOutput2$temp), align = "right")
+
+
+## clean up the column order just for aesthetics! :-)
+CombinedOutput2 <- select(CombinedOutput2, walkarea = walk.area, timestep,
+                          date, rain, rain1d, rain2d, rain5d, rain10d, temp,
+                          temp1d, temp2d, temp5d, temp10d, Ep, Qt, qt, qo, qs,
+                          qv, Smean, poultry, cattle, horses, goats, deer,
+                          sheep, pigs, animalunits, pres.final)
+
+## create a function to do the graphing of the data for each individual walk
+## area
+multiplot <- function(walk) {
+    par(mfrow = c(4, 2) + .2)
+    plot(rain1d ~ date, data = CombinedOutput2[CombinedOutput2$walkarea ==
+        walk, ], ylim = c(0, 0.08), type = "l")
+    plot(Ep ~ date, data = CombinedOutput2[CombinedOutput2$walkarea ==
+        walk, ], type = "l")
+    plot(qt ~ date, data = CombinedOutput2[CombinedOutput2$walkarea ==
+        walk, ], type = "l")
+    plot(qo ~ date, data = CombinedOutput2[CombinedOutput2$walkarea ==
+        walk, ], type = "l")
+    plot(qs ~ date, data = CombinedOutput2[CombinedOutput2$walkarea ==
+        walk, ], type = "l")
+    plot(qv ~ date, data = CombinedOutput2[CombinedOutput2$walkarea ==
+        walk, ], type = "l")
+    plot(Smean ~ date, data = CombinedOutput2[CombinedOutput2$walkarea ==
+        walk, ], type = "l")
+    plot(pres.final[walkarea == walk] ~ date[walkarea == walk],
+        data = CombinedOutput2, xlab = paste("walk ", walk, sep = ""),
+        ylab = "Positives", type = "h")
+    par(mfrow = c(1, 1))
+}
+
+## start the pdf function that will save the graphs as pdfs
+pdf(paste("GH_plots_publish.pdf", sep=""))
+
+## do all the plots for GH walk area using the input list and the
+## function and create pdf
+lapply(wknm, multiplot)
+
+## turn off the pdf device
+dev.off()
+
+## Now to do some stats on the outputs
+
+## calculate the correlation between quantity of rain1d on the day and
+## Campylobacter presence, note that the statement use = "pairwise.complete.obs"
+## causes the correlations to use only complete data, i.e. only for the days
+## when walks were done.
+(rain1d_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$rain1d, .$pres.final, use = "pairwise.complete.obs"))))
+
+## calculate the correlation between quantity of rain, summed for two days
+## prior, and Campylobacter presence
+(rain2d_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$rain2d, .$pres.final, use = "pairwise.complete.obs"))))
+
+## calculate the correlation between quantity of rain, summed for five days
+## prior, and Campylobacter presence
+(rain5d_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$rain5d, .$pres.final, use = "pairwise.complete.obs"))))
+
+## calculate the correlation between quantity of rain, summed for ten days
+## prior, and Campylobacter presence
+(rain10d_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$rain10d, .$pres.final, use = "pairwise.complete.obs"))))
+
+## pull together all the rain correlation outputs into one data frame
+(GH_all_rain_cor <- bind_rows(rain1d_pres_cor, rain2d_pres_cor, rain5d_pres_cor,
+                          rain10d_pres_cor, .id = "id"))
+
+## calculate the correlation between temp on the day before and
+## Campylobacter presence, note that the statement use = "pairwise.complete.obs"
+## causes the correlations to use only complete data, i.e. only for the days
+## when walks were done.
+(temp1d_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$temp1d, .$pres.final, use = "pairwise.complete.obs"))))
+
+## calculate the correlation between temp, mean for two days
+## prior, and Campylobacter presence
+(temp2d_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$temp2d, .$pres.final, use = "pairwise.complete.obs"))))
+
+## calculate the correlation between temp, mean for five days
+## prior, and Campylobacter presence
+(temp5d_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$temp5d, .$pres.final, use = "pairwise.complete.obs"))))
+
+## calculate the correlation between temp, mean for ten days
+## prior, and Campylobacter presence
+(temp10d_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$temp10d, .$pres.final, use = "pairwise.complete.obs"))))
+
+## pull together all the temp correlation outputs into one data frame
+(GH_all_temp_cor <- bind_rows(temp1d_pres_cor, temp2d_pres_cor, temp5d_pres_cor,
+                          temp10d_pres_cor, .id = "id"))
+
+## set the theme for the pdf outputs
+mytheme <- gridExtra::ttheme_default(
+    core = list(fg_params=list(fontsize = 8)))
+
+## print the pdf of all rain fall and Campylobacter presence correlations
+pdf("GH_all_rain_cor.pdf", paper = "a4")
+grid.table(GH_all_rain_cor, theme = mytheme)
+dev.off()
+
+## print the pdf of all temp and Campylobacter presence correlations
+pdf("GH_all_temp_cor.pdf", paper = "a4")
+grid.table(GH_all_temp_cor, theme = mytheme)
+dev.off()
+
+## calculate the correlation between overland flow on the day and presence
+(qo_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$qo, .$pres.final, use = "pairwise.complete.obs"))))
+
+## print the pdf of overland flow and Campylobacter presence correlations
+pdf("GH_qo_pres_cor.pdf", paper = "a4")
+grid.table(qo_pres_cor, theme = mytheme)
+dev.off()
+
+## calculate the correlation between subsurface flow on the day and presence
+(qs_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$qs, .$pres.final, use = "pairwise.complete.obs"))))
+
+## print the pdf of overland flow and Campylobacter presence correlations
+pdf("GH_qs_pres_cor.pdf", paper = "a4")
+grid.table(qs_pres_cor, theme = mytheme)
+dev.off()
+
+## calculate the correlation beween total flow, per unit area and presence
+(qt_pres_cor <- CombinedOutput2 %>%
+    group_by(walkarea) %>%
+    do(tidy(cor.test(.$qt, .$pres.final, use = "pairwise.complete.obs"))))
+
+## print the pdf of total flow and Campylobacter presence correlations
+pdf("GHqt_pres_cor.pdf", paper = "a4")
+grid.table(qt_pres_cor, theme = mytheme)
+dev.off()
+
+## reduce data set down to complete cases only, remove those with missing data,
+## should reduce to 240 rows
+co2 <- CombinedOutput2[complete.cases(CombinedOutput2), ]
+rownames(co2) <- NULL
+summary(co2)
+
+## first do a glm model effect of rain1d only, on Campylobacter presence to check
+## for autocorrelate, done by each individual walk area
+glm_rain1d_only <- co2 %>%
+    group_by(walkarea) %>%
+    do( augment( glm( pres.final ~ rain1d, data = ., family="poisson"))) 
+
+## first do a glm model effect of temp10d only, on Campylobacter presence to check
+## for autocorrelate, done by each individual walk area
+glm_temp_only <- co2 %>%
+    group_by(walkarea) %>%
+    do( augment( glm( pres.final ~ temp10d, data = ., family="poisson")))
+
+
+publish_glm <- co2 %>%
+    group_by(walkarea) %>%
+    do( tidy (glm ( pres.final ~ temp10d + rain10d + qo, data = .,
+                   family="poisson"))) %>%
+    as.data.frame(ungroup) %>%
+    mutate(walkarea = as.character(walkarea)) %>%
+    dust %>%
+    sprinkle(cols = c("estimate", "std.error", "statistic", "p.value"),
+             round = 5) %>%
+    sprinkle_print_method("latex") %>%
+    sprinkle(font_size=6) %>%
+    print(asis = FALSE) %>%
+    cat()
+
+
+## first do a glm model effect of temp only, on Campylobacter presence to check
+## for autocorrelate, done by each individual walk area
+glm_rain10d_only <- co2 %>%
+    group_by(walkarea) %>%
+    do( augment( glm( pres.final ~ rain10d, data = ., family="poisson"))) 
+
+## output a page with the plots of autocorrelation of residuals of rain
+pdf("Rain_AC_plots.pdf", paper ="a4")
+par(mfrow=c(3,2))
+
+plot(acf(glm_rain1d_only$.resid[glm_rain1d_only$walkarea == "BC"], plot=FALSE),
+     main = "C-Presence BC")
+plot(acf(glm_rain1d_only$.resid[glm_rain1d_only$walkarea == "GH"], plot=FALSE),
+     main = "C-Presence GH")
+plot(acf(glm_rain1d_only$.resid[glm_rain1d_only$walkarea == "WG"], plot=FALSE),
+     main = "C-Presence WG")
+plot(acf(glm_rain1d_only$.resid[glm_rain1d_only$walkarea == "RP"], plot=FALSE),
+     main = "C-Presence RP")
+plot(acf(glm_rain1d_only$.resid[glm_rain1d_only$walkarea == "HR"], plot=FALSE),
+     main = "C-Presence HR")
+plot(acf(glm_rain1d_only$.resid[glm_rain1d_only$walkarea == "SM"], plot=FALSE),
+     main = "C-Presence SM")
+dev.off()
+
+pdf("Temp_AC_plots.pdf", paper ="a4")
+par(mfrow=c(3,2))
+
+plot(acf(glm_temp_only$.resid[glm_temp_only$walkarea == "BC"], plot=FALSE),
+     main = "C-Presence BC")
+plot(acf(glm_temp_only$.resid[glm_temp_only$walkarea == "GH"], plot=FALSE),
+     main = "C-Presence GH")
+plot(acf(glm_temp_only$.resid[glm_temp_only$walkarea == "WG"], plot=FALSE),
+     main = "C-Presence WG")
+plot(acf(glm_temp_only$.resid[glm_temp_only$walkarea == "RP"], plot=FALSE),
+     main = "C-Presence RP")
+plot(acf(glm_temp_only$.resid[glm_temp_only$walkarea == "HR"], plot=FALSE),
+     main = "C-Presence HR")
+plot(acf(glm_temp_only$.resid[glm_temp_only$walkarea == "SM"], plot=FALSE),
+     main = "C-Presence SM")
+dev.off()
+
+pdf("Rain10d_AC_plots.pdf", paper ="a4")
+par(mfrow=c(3,2))
+
+plot(acf(glm_rain10d_only$.resid[glm_rain10d_only$walkarea == "BC"], plot=FALSE),
+     main = "C-Presence BC")
+plot(acf(glm_rain10d_only$.resid[glm_rain10d_only$walkarea == "GH"], plot=FALSE),
+     main = "C-Presence GH")
+plot(acf(glm_rain10d_only$.resid[glm_rain10d_only$walkarea == "WG"], plot=FALSE),
+     main = "C-Presence WG")
+plot(acf(glm_rain10d_only$.resid[glm_rain10d_only$walkarea == "RP"], plot=FALSE),
+     main = "C-Presence RP")
+plot(acf(glm_rain10d_only$.resid[glm_rain10d_only$walkarea == "HR"], plot=FALSE),
+     main = "C-Presence HR")
+plot(acf(glm_rain10d_only$.resid[glm_rain10d_only$walkarea == "SM"], plot=FALSE),
+     main = "C-Presence SM")
+dev.off()
+
+## do glm model analysis for Campylobacter presence, in each individual walk
+## area and put the outputs in table in latex format.  There are no animal units
+## in this model because they do no vary within each walkarea
+pres_glm <- co2 %>%
+    group_by(walkarea) %>%
+    do( tidy (glm ( pres.final ~ rain1d + rain2d + rain5d + rain10d + temp + qo
+                   + qs + qt, data = ., family="poisson"))) %>%
+    as.data.frame(ungroup) %>%
+    mutate(walkarea = as.character(walkarea)) %>%
+    dust %>%
+    sprinkle(cols = c("estimate", "std.error", "statistic", "p.value"),
+             round = 5) %>%
+    sprinkle_print_method("latex") %>%
+    sprinkle(font_size=6) %>%
+    print(asis = FALSE) %>%
+    cat()
+
+## produce a new scaled data set to see if this overcomes the warning from glmer
+## "Some predictor variables are on very different scales: consider rescaling"
+## got this from  "http://stackoverflow.com/questions/26904580/
+## error-messages-when-running-glmer-in-r"
+##pvars <- c("rain1d", "rain2d", "rain5d", "rain10d", "temp", "qo", "qt", "animalunits")
+pvars <- c("rain1d", "rain2d", "rain5d", "rain10d", "temp", "animalunits")
+co2scaled <- co2
+## rescale <- function(x) (x-min(x))/(max(x) - min(x)) * 100
+co2scaled[pvars] <- lapply(co2[pvars], scale)
+
+
+## do mixed effect glm model analysis for Campylobacter presence, with all walk
+## areas combined and treating walk area as random effect, then put the outputs
+## in table in latex format
+
+## for the main effects model only, #1
+pres_glmer1 <- co2 %>%    
+    do( tidy (glmer (pres.final ~ rain1d + rain2d + rain5d + rain10d + temp
+                     + qo + qt + animalunits + (1|walkarea),
+                     data = ., family="poisson"), conf.int=TRUE)) %>%
+    dust %>%
+    sprinkle(cols = c("estimate", "std.error", "statistic",
+                      "p.value"), round = 5) %>%
+    sprinkle_print_method("latex") %>%
+    sprinkle(font_size=6) %>%
+    print(asis = FALSE) %>%
+    cat()
+
+## now include interaction effects for main effects that appeared to be close to
+## significance om main effects model
+pres_glmer2 <- co2 %>%
+    do( tidy (glmer (pres.final ~ rain10d*temp*qo*animalunits + (1|walkarea),
+                     data =., family="poisson"),
+              effects = c("ran_pars", "fixed"), conf.int = TRUE)) %>%
+    dust %>%
+    sprinkle(cols = c("estimate", "std.error", "statistic",
+                      "p.value"), round = 5) %>%
+    sprinkle_print_method("latex") %>%
+    sprinkle(font_size=6) %>%
+    print(asis = FALSE) %>%
+    cat()
+
+## for the reduced model, 2
+pres_glmer3 <- co2 %>%
+    do( tidy (glmer (pres.final ~ rain10d*temp*animalunits + (1|walkarea),
+                     data = ., family="poisson"),
+              conf.int=TRUE)) %>%
+    dust %>%
+    sprinkle(cols = c("estimate", "std.error", "statistic",
+                      "p.value"), round = 5) %>%
+    sprinkle_print_method("latex") %>%
+    sprinkle(font_size=6) %>%
+    print(asis = FALSE) %>%
+    cat()
+
+
+## run model again, to get object that can be graphed
+pres_glmer4 <- glmer (pres.final ~ rain10d*temp*animalunits + (1|walkarea),
+                      data = co2, family="poisson") 
+
+## anova(pres_glmer4)
+## vcov(pres_glmer4)
+## regTermTest(pres_glmer4, "rain10d")
+
+
+## use the effects package to pull out the data
+rxt <- data.frame(effect("rain10d:temp", pres_glmer4))
+rxa <- data.frame(effect("rain10d:animalunits", pres_glmer4))
+axt <- data.frame(effect("temp:animalunits", pres_glmer4))
+
+## then graph it using wireframe from lattice package
+rainxtemp3d <- wireframe(fit ~ rain10d*temp, data  = rxt,
+          main = "10 day Rain by Temp Interaction",
+          xlab = list("Previous 10d Cum. Rain (m)", rot = 30),
+          ylab = list("Maximum daily temperature (C)", rot = -40),
+          zlab = list("Presence of Campylobacter (1-3)", rot = 90),
+          xlim = c(0,0.1),
+##          ylim = c(0,20),
+          zlim = c(0,8),
+          shade = TRUE,
+##          par.box = c(col = "transparent"),
+##          par.settings = list(axis.line = list(col = "transparent")),
+          scales = list(arrows = FALSE))
+
+## then graph it using wireframe from lattice package
+rainxannu3d <- wireframe(fit ~ rain10d*animalunits, data  = rxa,
+          main = "10 day Rain by Animal Units Interaction",
+          xlab = list("Previous 10d Cum. Rain (m)", rot = 30),
+          ylab = list("Number of Animal Units in Area", rot = -40),
+          zlab = list("Presence of Campylobacter (1-3)", rot = 90),
+          xlim = c(0,0.1),
+##          ylim = c(0,20),
+          zlim = c(0,8),
+          shade = TRUE,
+##          par.box = c(col = "transparent"),
+##          par.settings = list(axis.line = list(col = "transparent")),
+          scales = list(arrows = FALSE))
+
+
+## then graph it using wireframe from lattice package
+annuxtemp3d <- wireframe(fit ~ animalunits*temp, data  = axt,
+          main = "Animal Units by Temp Interaction",
+          xlab = list("Number of Animal Units in Area", rot = 30),
+          ylab = list("Maximum daily temperature (C)", rot = -40),
+          zlab = list("Presence of Campylobacter (1-3)", rot = 90),
+##          xlim = c(0,0.1),
+##          ylim = c(0,20),
+          zlim = c(0,3),
+          shade = TRUE,
+##          par.box = c(col = "transparent"),
+##          par.settings = list(axis.line = list(col = "transparent")),
+          scales = list(arrows = FALSE))
+
+## predicted effects, using sjPlot package
+temp_pred <- sjp.glmer(pres_glmer4, type="pred", vars = "temp",
+                show.ci = TRUE)$plot + coord_cartesian(ylim = c(0, 3)) 
+
+rain10d_pred <- sjp.glmer(pres_glmer4, type="pred", vars = "rain10d",
+                show.ci = TRUE)$plot + coord_cartesian(ylim = c(0, 3)) 
+
+annu_pred <- sjp.glmer(pres_glmer4, type="pred", vars = "animalunits",
+                show.ci = TRUE)$plot + coord_cartesian(ylim = c(0, 3)) 
+
+pdf("prediction_plots.pdf", paper="a4")
+plot(temp_pred)
+plot(rain10d_pred)
+plot(annu_pred)
+plot(rainxtemp3d)
+plot(rainxannu3d)
+plot(annuxtemp3d)
+dev.off()
+
+
