@@ -48,3 +48,17 @@ ls -al
 git remote -v
 ls -lt
 exit
+ls *.bsh
+bash GH_GRASS2.bsh 
+cd graphs_\&_stats/
+ls
+e GH_grph_stats.R
+cd ..
+git remote -v
+cd ~/research/ra1188uea/Enigma/GH-Publish-GRASS/
+git remote -v
+git remote -v
+git add -A
+git commit -m 'removed unnecessary files and emacs backups'
+git push remotegrass master
+exit
