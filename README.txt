@@ -1,15 +1,17 @@
 Last revised 2/9/2016 by JAM at UEA
 
+doi = {10.5281/zenodo.61376}
+
 This is a working group of files that was developed by Dr. Jim Maas at the
-University of East Anglia to tackle a specific problem.  We needed a
-hydrological model, of which there are many, to predict overland and subsurface
-water movement on six specific small areas of land, in the United Kingdom.
-Logically these water flows would be dependent on the topography of the area,
-the soil type, and also the precipitation.  After a review of the many
-combinations that are currently available, as of August 2016, we settled on the
-combination of Geographic Resources Analysis Support System (GRASS) GIS system,
-combined with a hydrolgical model called Topmodel and then did data manipulation
-and statistical analysis using the R programme.
+University of East Anglia to tackle a specific problem.  We needed select and
+use a hydrological model, of which there are many to choose from, to predict
+overland and subsurface water movement on six specific small areas of land, in
+the United Kingdom.  Logically these water flows would be dependent on the
+topography of the area, the soil type, and also the precipitation.  After a
+review of the many combinations that are currently available, as of August 2016,
+we settled on the combination of Geographic Resources Analysis Support System
+(GRASS) GIS system, combined with a hydrolgical model called Topmodel and then
+did data manipulation and statistical analysis using the R programme.
 
 Each of these programmes are open-source and thus freely available.  In this
 project we have opted to use the Linux operating system, however each of these
