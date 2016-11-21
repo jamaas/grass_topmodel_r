@@ -1,3 +1,0 @@
-COMMAND: v.in.ogr -o input="/home/jamaas/research/ra1188uea/Enigma/GH-Publish-GRASS/GHvect.shp" layer="GHvect" output="GHvect" min_area=0.0001 snap=-1
-GISDBASE: /home/jamaas/research/ra1188uea/Enigma/GH-Publish-GRASS
-LOCATION: GHpublish MAPSET: ghpublish2 USER: jamaas DATE: Fri Aug 19 13:21:25 2016
