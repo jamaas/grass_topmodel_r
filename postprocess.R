@@ -3,7 +3,7 @@
 ## Again copied from Roy Sanderson at Newcastle by JAM at UEA
 ## Created on 17/03/2016
 
-## Last modified on 16/06/2016
+## Last modified on 21/11/2016
 
 rm(list=ls())
 
@@ -35,7 +35,7 @@ weather.dat <- signif (read.table(paste (walk_area, "_Rn_Tp_Ep.txt", sep=""),
 colnames(weather.dat) <- c("rain", "temp", "Ep")
 
 ## Grab this file as it also has all the dates
-dates.dat <- read.csv(file = "./GHWeatherData.csv", sep=",", header=TRUE)
+dates.dat <- read.csv(file = "./EW2WeatherData.csv", sep=",", header=TRUE)
 
 ## actual dates are only in second column
 date <- dates.dat[ ,2]

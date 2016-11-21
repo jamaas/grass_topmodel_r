@@ -1,5 +1,5 @@
-# r.topmodel output file for GHWalk
-# Run time: 2016-08-19 13:50:36
+# r.topmodel output file for EW2Walk
+# Run time: 2016-11-21 12:55:31
 #
 # Qt_peak [m^3/timestep]:  Peak total flow
 # tt_peak [timestep]:      Peak time for total flow

@@ -1,5 +1,5 @@
 test -r ~/.alias && . ~/.alias
-PS1='GRASS 7.0.4 (GHpublish):\w > '
+PS1='GRASS 7.0.5 (GHpublish):\w > '
 grass_prompt() {
 	LOCATION="`g.gisenv get=GISDBASE,LOCATION_NAME,MAPSET separator='/'`"
 	if test -d "$LOCATION/grid3/G3D_MASK" && test -f "$LOCATION/cell/MASK" ; then
@@ -25,6 +25,6 @@ export GRASS_PAGER=pager
 export GRASS_HTML_BROWSER=xdg-open
 export GRASS_ADDON_BASE=/home/jamaas/.grass7/addons
 export GRASS_PROJSHARE=/usr/share/proj
-export GRASS_VERSION=7.0.4
+export GRASS_VERSION=7.0.5
 export PATH="/usr/lib/grass70/bin:/usr/lib/grass70/scripts:/home/jamaas/.grass7/addons/bin:/home/jamaas/.grass7/addons/scripts:/usr/local/texlive/2015/texmf-dist/doc/man:/usr/local/texlive/2015/texmf-dist/doc/info:/usr/local/texlive/2015/bin/x86_64-linux:/usr/local/texlive/2015/texmf-dist/doc/man:/usr/local/texlive/2015/texmf-dist/doc/info:/usr/local/texlive/2015/bin/x86_64-linux:/home/jamaas/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/jamaas/.rvm/bin:/opt/adb:/opt/OpenBUGS312/bin:/usr/local/stata:/home/jamaas/.rvm/bin"
 export HOME="/home/jamaas"

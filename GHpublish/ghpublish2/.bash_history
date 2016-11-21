@@ -62,3 +62,4 @@ git add -A
 git commit -m 'removed unnecessary files and emacs backups'
 git push remotegrass master
 exit
+exit

@@ -1,0 +1,11 @@
+COMMAND: r.to.vect input="topmod_lfp_thin" output="topmod_lfp_vect" type="line" column="value"
+GISDBASE: /home/jamaas/research/ra1188uea/Enigma/Enigma-Area2-Publish-GRASS
+LOCATION: EW2 MAPSET: EW2 USER: jamaas DATE: Mon Nov 21 12:21:46 2016
+---------------------------------------------------------------------------------
+COMMAND: v.edit map="topmod_lfp_vect" layer="1" type="point,line,boundary,centroid" tool="merge" threshold=-1,0,0 snap="no"
+GISDBASE: /home/jamaas/research/ra1188uea/Enigma/Enigma-Area2-Publish-GRASS
+LOCATION: EW2 MAPSET: EW2 USER: jamaas DATE: Mon Nov 21 12:21:46 2016
+---------------------------------------------------------------------------------
+COMMAND: v.edit map="topmod_lfp_vect" layer="1" type="point,line,boundary,centroid" tool="catdel" threshold=-1,0,0 cats="2-1" snap="no"
+GISDBASE: /home/jamaas/research/ra1188uea/Enigma/Enigma-Area2-Publish-GRASS
+LOCATION: EW2 MAPSET: EW2 USER: jamaas DATE: Mon Nov 21 12:21:46 2016

@@ -1,0 +1,3 @@
+COMMAND: v.in.ogr --overwrite -o input="EW2vect.shp" layer="EW2vect" output="EW2walk" min_area=0.0001 snap=-1
+GISDBASE: /home/jamaas/research/ra1188uea/Enigma/Enigma-Area2-Publish-GRASS
+LOCATION: EW2 MAPSET: EW2 USER: jamaas DATE: Mon Nov 21 12:21:00 2016

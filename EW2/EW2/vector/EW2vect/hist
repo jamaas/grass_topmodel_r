@@ -1,0 +1,4 @@
+COMMAND: v.in.ogr --overwrite input="/home/jamaas/research/ra1188uea/Enigma/Enigma-Area2-Publish-GRASS/GHvect.shp" layer="GHvect" output="GHvect" min_area=0.0001 snap=-1
+GISDBASE: /home/jamaas/research/ra1188uea/Enigma/Enigma-Area2-Publish-GRASS
+LOCATION: EW2 MAPSET: EW2 USER: jamaas DATE: Fri Nov 18 15:25:28 2016
+---------------------------------------------------------------------------------
